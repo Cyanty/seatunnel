@@ -167,8 +167,7 @@ public class JdbcBatchStatementExecutorBuilder {
                 connection ->
                         FieldNamedPreparedStatement.prepareStatement(
                                 connection,
-                                SqlUtils.getInsertIntoStatement(
-                                        table, rowType, rowConverter.getTableSchema()),
+                                SqlUtils.getInsertIntoStatement(table, rowType.getFieldNames()),
                                 rowType.getFieldNames()),
                 connection ->
                         FieldNamedPreparedStatement.prepareStatement(
@@ -195,8 +194,7 @@ public class JdbcBatchStatementExecutorBuilder {
                 connection ->
                         FieldNamedPreparedStatement.prepareStatement(
                                 connection,
-                                SqlUtils.getInsertIntoStatement(
-                                        table, rowType, valueConverter.getTableSchema()),
+                                SqlUtils.getInsertIntoStatement(table, rowType.getFieldNames()),
                                 rowType.getFieldNames()),
                 connection ->
                         FieldNamedPreparedStatement.prepareStatement(
@@ -211,8 +209,7 @@ public class JdbcBatchStatementExecutorBuilder {
 
     private static JdbcBatchStatementExecutor createInsertExecutor(
             String table, SeaTunnelRowType rowType, JdbcRowConverter rowConverter) {
-        String insertSQL =
-                SqlUtils.getInsertIntoStatement(table, rowType, rowConverter.getTableSchema());
+        String insertSQL = SqlUtils.getInsertIntoStatement(table, rowType.getFieldNames());
         return new SimpleBatchStatementExecutor(
                 connection ->
                         FieldNamedPreparedStatement.prepareStatement(

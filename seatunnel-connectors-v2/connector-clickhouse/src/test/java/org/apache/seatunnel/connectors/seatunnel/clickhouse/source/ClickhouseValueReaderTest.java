@@ -33,17 +33,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import com.clickhouse.client.ClickHouseColumn;
 import com.clickhouse.client.ClickHouseException;
 import com.clickhouse.client.ClickHouseNode;
-import com.clickhouse.client.ClickHouseRecord;
 import com.clickhouse.client.ClickHouseRequest;
 import com.clickhouse.client.ClickHouseResponse;
-import com.clickhouse.client.ClickHouseValue;
-import com.clickhouse.client.data.ClickHouseIntegerValue;
-import com.clickhouse.client.data.ClickHouseLongValue;
-import com.clickhouse.client.data.ClickHouseSimpleRecord;
-import com.clickhouse.client.data.ClickHouseStringValue;
+import com.clickhouse.data.ClickHouseColumn;
+import com.clickhouse.data.ClickHouseRecord;
+import com.clickhouse.data.ClickHouseSimpleRecord;
+import com.clickhouse.data.ClickHouseValue;
+import com.clickhouse.data.value.ClickHouseIntegerValue;
+import com.clickhouse.data.value.ClickHouseLongValue;
+import com.clickhouse.data.value.ClickHouseStringValue;
 import lombok.extern.slf4j.Slf4j;
 
 import java.lang.reflect.Field;
@@ -52,7 +52,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -433,8 +436,13 @@ public class ClickhouseValueReaderTest {
             clickHouseValues[1] = ClickHouseStringValue.of("name" + i);
             clickHouseValues[2] = ClickHouseIntegerValue.of(20 + i);
 
-            ClickHouseRecord mockRecord =
-                    ClickHouseSimpleRecord.of(clickHouseColumns, clickHouseValues);
+            Map<String, Integer> columnIndex =
+                    IntStream.range(0, clickHouseColumns.size())
+                            .boxed()
+                            .collect(
+                                    Collectors.toMap(
+                                            j -> clickHouseColumns.get(j).getColumnName(), j -> j));
+            ClickHouseRecord mockRecord = ClickHouseSimpleRecord.of(columnIndex, clickHouseValues);
             records.add(mockRecord);
         }
         return records;

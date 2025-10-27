@@ -22,6 +22,11 @@ import org.apache.seatunnel.shade.com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.apache.seatunnel.common.exception.CommonError;
 
+import com.clickhouse.data.value.ClickHouseGeoMultiPolygonValue;
+import com.clickhouse.data.value.ClickHouseGeoPointValue;
+import com.clickhouse.data.value.ClickHouseGeoPolygonValue;
+import com.clickhouse.data.value.ClickHouseGeoRingValue;
+
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 
@@ -35,17 +40,20 @@ public class StringInjectFunction implements ClickhouseFieldInjectFunction {
             throws SQLException {
         try {
             if ("Point".equals(fieldType)) {
-                statement.setObject(
-                        index, MAPPER.readValue(replace(value.toString()), double[].class));
+                double[] point = MAPPER.readValue(replace(value.toString()), double[].class);
+                statement.setObject(index, ClickHouseGeoPointValue.of(point).toSqlExpression());
             } else if ("Ring".equals(fieldType)) {
-                statement.setObject(
-                        index, MAPPER.readValue(replace(value.toString()), double[][].class));
+                double[][] ring = MAPPER.readValue(replace(value.toString()), double[][].class);
+                statement.setObject(index, ClickHouseGeoRingValue.of(ring).toSqlExpression());
             } else if ("Polygon".equals(fieldType)) {
-                statement.setObject(
-                        index, MAPPER.readValue(replace(value.toString()), double[][][].class));
+                double[][][] polygon =
+                        MAPPER.readValue(replace(value.toString()), double[][][].class);
+                statement.setObject(index, ClickHouseGeoPolygonValue.of(polygon).toSqlExpression());
             } else if ("MultiPolygon".equals(fieldType)) {
+                double[][][][] multiPolygon =
+                        MAPPER.readValue(replace(value.toString()), double[][][][].class);
                 statement.setObject(
-                        index, MAPPER.readValue(replace(value.toString()), double[][][][].class));
+                        index, ClickHouseGeoMultiPolygonValue.of(multiPolygon).toSqlExpression());
             } else if ("JSON".equals(fieldType)) {
                 statement.setString(
                         index,
@@ -63,6 +71,7 @@ public class StringInjectFunction implements ClickhouseFieldInjectFunction {
     @Override
     public boolean isCurrentFieldType(String fieldType) {
         if ("String".equals(fieldType)
+                || "UInt64".equals(fieldType)
                 || "Int128".equals(fieldType)
                 || "UInt128".equals(fieldType)
                 || "Int256".equals(fieldType)

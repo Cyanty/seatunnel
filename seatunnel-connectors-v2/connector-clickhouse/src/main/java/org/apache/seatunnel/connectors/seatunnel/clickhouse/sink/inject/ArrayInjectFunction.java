@@ -20,9 +20,13 @@ package org.apache.seatunnel.connectors.seatunnel.clickhouse.sink.inject;
 import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
 import org.apache.seatunnel.connectors.seatunnel.clickhouse.exception.ClickhouseConnectorException;
 
+import com.clickhouse.data.ClickHouseDataType;
+import com.clickhouse.jdbc.internal.JdbcUtils;
+
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.regex.Pattern;
 
 public class ArrayInjectFunction implements ClickhouseFieldInjectFunction {
@@ -33,56 +37,25 @@ public class ArrayInjectFunction implements ClickhouseFieldInjectFunction {
     @Override
     public void injectFields(PreparedStatement statement, int index, Object value)
             throws SQLException {
-        String sqlType;
         Object[] elements = (Object[]) value;
         String type = fieldType.substring(fieldType.indexOf("(") + 1, fieldType.indexOf(")"));
-        switch (type) {
-            case "String":
-            case "Int128":
-            case "UInt128":
-            case "Int256":
-            case "UInt256":
-                sqlType = "TEXT";
-                elements = Arrays.copyOf(elements, elements.length, String[].class);
-                break;
-            case "Int8":
-                sqlType = "TINYINT";
-                elements = Arrays.copyOf(elements, elements.length, Byte[].class);
-                break;
-            case "UInt8":
-            case "Int16":
-                sqlType = "SMALLINT";
-                elements = Arrays.copyOf(elements, elements.length, Short[].class);
-                break;
-            case "UInt16":
-            case "Int32":
-                sqlType = "INTEGER";
-                elements = Arrays.copyOf(elements, elements.length, Integer[].class);
-                break;
-            case "UInt32":
-            case "Int64":
-            case "UInt64":
-                sqlType = "BIGINT";
-                elements = Arrays.copyOf(elements, elements.length, Long[].class);
-                break;
-            case "Float32":
-                sqlType = "REAL";
-                elements = Arrays.copyOf(elements, elements.length, Float[].class);
-                break;
-            case "Float64":
-                sqlType = "DOUBLE";
-                elements = Arrays.copyOf(elements, elements.length, Double[].class);
-                break;
-            case "Bool":
-                sqlType = "BOOLEAN";
-                elements = Arrays.copyOf(elements, elements.length, Boolean[].class);
-                break;
-            default:
-                throw new ClickhouseConnectorException(
-                        CommonErrorCodeDeprecated.UNSUPPORTED_DATA_TYPE,
-                        "array inject error, unsupported data type: " + type);
+
+        ClickHouseDataType clickHouseDataType;
+        try {
+            clickHouseDataType = ClickHouseDataType.valueOf(type);
+        } catch (IllegalArgumentException e) {
+            throw new ClickhouseConnectorException(
+                    CommonErrorCodeDeprecated.UNSUPPORTED_DATA_TYPE,
+                    "array inject error, unsupported data type: " + type);
         }
-        statement.setArray(index, statement.getConnection().createArrayOf(sqlType, elements));
+        String sqlTypeName = clickHouseDataType.name();
+
+        statement.setArray(
+                index,
+                new com.clickhouse.jdbc.types.Array(
+                        Collections.unmodifiableList(Arrays.asList(elements.clone())),
+                        sqlTypeName,
+                        JdbcUtils.convertToSqlType(clickHouseDataType).getVendorTypeNumber()));
     }
 
     @Override

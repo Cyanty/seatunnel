@@ -26,8 +26,16 @@ import org.apache.seatunnel.api.table.type.SeaTunnelDataType;
 import org.apache.seatunnel.common.exception.CommonErrorCodeDeprecated;
 import org.apache.seatunnel.connectors.seatunnel.clickhouse.exception.ClickhouseConnectorException;
 
-import com.clickhouse.client.ClickHouseColumn;
-import com.clickhouse.client.ClickHouseValue;
+import com.clickhouse.data.ClickHouseColumn;
+import com.clickhouse.data.ClickHouseValue;
+import com.clickhouse.data.value.UnsignedByte;
+import com.clickhouse.data.value.UnsignedInteger;
+import com.clickhouse.data.value.UnsignedLong;
+import com.clickhouse.data.value.UnsignedShort;
+import com.clickhouse.data.value.array.ClickHouseByteArrayValue;
+import com.clickhouse.data.value.array.ClickHouseIntArrayValue;
+import com.clickhouse.data.value.array.ClickHouseLongArrayValue;
+import com.clickhouse.data.value.array.ClickHouseShortArrayValue;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -35,6 +43,8 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -67,11 +77,11 @@ public class TypeConvertUtil {
             }
         }
         Class<?> type = column.getDataType().getObjectClass();
-        if (Integer.class.equals(type)) {
+        if (Integer.class.equals(type) || UnsignedShort.class.equals(type)) {
             return BasicType.INT_TYPE;
-        } else if (Long.class.equals(type)) {
+        } else if (Long.class.equals(type) || UnsignedInteger.class.equals(type)) {
             return BasicType.LONG_TYPE;
-        } else if (Short.class.equals(type)) {
+        } else if (Short.class.equals(type) || UnsignedByte.class.equals(type)) {
             return BasicType.SHORT_TYPE;
         } else if (Byte.class.equals(type)) {
             return BasicType.BYTE_TYPE;
@@ -99,9 +109,9 @@ public class TypeConvertUtil {
             return BasicType.STRING_TYPE;
         } else if (Inet6Address.class.equals(type)) {
             return BasicType.STRING_TYPE;
-        } else if (Object.class.equals(type)) {
+        } else if (Object.class.equals(type) || List.class.equals(type)) {
             return BasicType.STRING_TYPE;
-        } else if (BigInteger.class.equals(type)) {
+        } else if (BigInteger.class.equals(type) || UnsignedLong.class.equals(type)) {
             return BasicType.STRING_TYPE;
         } else {
             // TODO support pojo
@@ -139,16 +149,46 @@ public class TypeConvertUtil {
         } else if (dataType instanceof ArrayType) {
             Class<?> typeClass = dataType.getTypeClass();
             if (String[].class.equals(typeClass)) {
+                if (record instanceof ClickHouseLongArrayValue) {
+                    Object[] objects = record.asArray();
+                    if (objects instanceof UnsignedLong[]) {
+                        return Arrays.stream(objects).map(Object::toString).toArray(String[]::new);
+                    }
+                }
                 return record.asArray(String.class);
             } else if (Boolean[].class.equals(typeClass)) {
                 return record.asArray(Boolean.class);
             } else if (Byte[].class.equals(typeClass)) {
                 return record.asArray(Byte.class);
             } else if (Short[].class.equals(typeClass)) {
+                if (record instanceof ClickHouseByteArrayValue) {
+                    Object[] objects = record.asArray();
+                    if (objects instanceof UnsignedByte[]) {
+                        return Arrays.stream(objects)
+                                .map(v -> ((UnsignedByte) v).shortValue())
+                                .toArray(Short[]::new);
+                    }
+                }
                 return record.asArray(Short.class);
             } else if (Integer[].class.equals(typeClass)) {
+                if (record instanceof ClickHouseShortArrayValue) {
+                    Object[] objects = record.asArray();
+                    if (objects instanceof UnsignedShort[]) {
+                        return Arrays.stream(objects)
+                                .map(v -> ((UnsignedShort) v).intValue())
+                                .toArray(Integer[]::new);
+                    }
+                }
                 return record.asArray(Integer.class);
             } else if (Long[].class.equals(typeClass)) {
+                if (record instanceof ClickHouseIntArrayValue) {
+                    Object[] objects = record.asArray();
+                    if (objects instanceof UnsignedInteger[]) {
+                        return Arrays.stream(objects)
+                                .map(v -> ((UnsignedInteger) v).longValue())
+                                .toArray(Long[]::new);
+                    }
+                }
                 return record.asArray(Long.class);
             } else if (Float[].class.equals(typeClass)) {
                 return record.asArray(Float.class);

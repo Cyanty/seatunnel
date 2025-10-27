@@ -45,6 +45,14 @@ import org.testcontainers.shaded.org.apache.commons.io.IOUtils;
 import org.testcontainers.shaded.org.apache.commons.lang3.tuple.Pair;
 import org.testcontainers.utility.DockerLoggerFactory;
 
+import com.clickhouse.data.ClickHouseDataType;
+import com.clickhouse.data.value.ClickHouseGeoPointValue;
+import com.clickhouse.data.value.ClickHouseGeoRingValue;
+import com.clickhouse.data.value.UnsignedByte;
+import com.clickhouse.data.value.UnsignedInteger;
+import com.clickhouse.data.value.UnsignedLong;
+import com.clickhouse.data.value.UnsignedShort;
+import com.clickhouse.jdbc.internal.JdbcUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
@@ -52,6 +60,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.sql.Array;
 import java.sql.Connection;
@@ -93,8 +102,6 @@ public class ClickhouseIT extends TestSuiteBase implements TestResource {
     private static final String INSERT_SQL = "insert_sql";
     private static final String INSERT_MERGE_TREE_SQL = "insert_merge_tree_sql";
     private static final String COMPARE_SQL = "compare_sql";
-    // Enables the use of the experimental `Object('json')` type for the current session
-    private static final String SETTING = "SET allow_experimental_object_type = 1;\n";
     private static final Pair<SeaTunnelRowType, List<SeaTunnelRow>> TEST_DATASET =
             generateTestDataSet();
     private static final Config CONFIG = getInitClickhouseConfig();
@@ -315,17 +322,17 @@ public class ClickhouseIT extends TestSuiteBase implements TestResource {
     private void initializeClickhouseTable() {
         try {
             Statement statement = this.connection.createStatement();
-            statement.execute(SETTING + CONFIG.getString(SOURCE_TABLE));
-            statement.execute(SETTING + CONFIG.getString(SINK_TABLE));
-            statement.execute(SETTING + CONFIG.getString(SOURCE_MERGE_TREE_TABLE));
+            statement.execute(CONFIG.getString(SOURCE_TABLE));
+            statement.execute(CONFIG.getString(SINK_TABLE));
+            statement.execute(CONFIG.getString(SOURCE_MERGE_TREE_TABLE));
 
             // table for multi-table sink test
             for (String tableName : MULTI_SINK_TABLES) {
-                statement.execute(SETTING + CONFIG.getString(tableName));
+                statement.execute(CONFIG.getString(tableName));
             }
 
             for (String tableName : MULTI_SOURCE_SINK_TABLES) {
-                statement.execute(SETTING + CONFIG.getString(tableName));
+                statement.execute(CONFIG.getString(tableName));
             }
         } catch (SQLException e) {
             throw new RuntimeException("Initializing Clickhouse table failed!", e);
@@ -351,6 +358,14 @@ public class ClickhouseIT extends TestSuiteBase implements TestResource {
                 && config.hasPath(INSERT_SQL)
                 && config.hasPath(COMPARE_SQL);
         return config;
+    }
+
+    private Array toSqlArray(Object value, ClickHouseDataType clickHouseDataType)
+            throws SQLException {
+        return new com.clickhouse.jdbc.types.Array(
+                Collections.unmodifiableList(Arrays.asList((Object[]) value)),
+                clickHouseDataType.name(),
+                JdbcUtils.convertToSqlType(clickHouseDataType).getVendorTypeNumber());
     }
 
     private Array toSqlArray(Object value) throws SQLException {
@@ -380,6 +395,30 @@ public class ClickhouseIT extends TestSuiteBase implements TestResource {
         } else if (Double[].class.equals(value.getClass())) {
             sqlType = "DOUBLE";
             elements = (Double[]) value;
+        }
+        if (sqlType == null) {
+            throw new IllegalArgumentException(
+                    "array inject error, not supported data type: " + value.getClass());
+        }
+        return connection.createArrayOf(sqlType, elements);
+    }
+
+    private Array toSqlUnsignedArray(Object value) throws SQLException {
+        Object[] elements = null;
+        String sqlType = null;
+        if (String[].class.equals(value.getClass())) {
+            sqlType = "UInt64";
+            elements =
+                    Arrays.stream((String[]) value).map(BigInteger::new).toArray(BigInteger[]::new);
+        } else if (Short[].class.equals(value.getClass())) {
+            sqlType = "UInt8";
+            elements = (Short[]) value;
+        } else if (Integer[].class.equals(value.getClass())) {
+            sqlType = "UInt16";
+            elements = (Integer[]) value;
+        } else if (Long[].class.equals(value.getClass())) {
+            sqlType = "UInt32";
+            elements = (Long[]) value;
         }
         if (sqlType == null) {
             throw new IllegalArgumentException(
@@ -424,35 +463,59 @@ public class ClickhouseIT extends TestSuiteBase implements TestResource {
                 for (SeaTunnelRow row : TEST_DATASET.getValue()) {
                     preparedStatement.setLong(1, (Long) row.getField(0));
                     preparedStatement.setObject(2, row.getField(1));
-                    preparedStatement.setArray(3, toSqlArray(row.getField(2)));
-                    preparedStatement.setArray(4, toSqlArray(row.getField(3)));
-                    preparedStatement.setArray(5, toSqlArray(row.getField(4)));
-                    preparedStatement.setArray(6, toSqlArray(row.getField(5)));
-                    preparedStatement.setArray(7, toSqlArray(row.getField(6)));
-                    preparedStatement.setArray(8, toSqlArray(row.getField(7)));
-                    preparedStatement.setString(9, (String) row.getField(8));
-                    preparedStatement.setBoolean(10, (Boolean) row.getField(9));
-                    preparedStatement.setByte(11, (Byte) row.getField(10));
-                    preparedStatement.setShort(12, (Short) row.getField(11));
-                    preparedStatement.setInt(13, (Integer) row.getField(12));
-                    preparedStatement.setLong(14, (Long) row.getField(13));
-                    preparedStatement.setFloat(15, (Float) row.getField(14));
-                    preparedStatement.setDouble(16, (Double) row.getField(15));
-                    preparedStatement.setBigDecimal(17, (BigDecimal) row.getField(16));
-                    preparedStatement.setDate(18, Date.valueOf((LocalDate) row.getField(17)));
-                    preparedStatement.setTimestamp(
-                            19, Timestamp.valueOf((LocalDateTime) row.getField(18)));
+                    preparedStatement.setArray(
+                            3, toSqlArray(row.getField(2), ClickHouseDataType.String));
+                    preparedStatement.setArray(
+                            4, toSqlArray(row.getField(3), ClickHouseDataType.Int8));
+                    preparedStatement.setArray(
+                            5, toSqlArray(row.getField(4), ClickHouseDataType.UInt8));
+                    preparedStatement.setArray(
+                            6, toSqlArray(row.getField(5), ClickHouseDataType.Int16));
+                    preparedStatement.setArray(
+                            7, toSqlArray(row.getField(6), ClickHouseDataType.UInt16));
+                    preparedStatement.setArray(
+                            8, toSqlArray(row.getField(7), ClickHouseDataType.Int32));
+                    preparedStatement.setArray(
+                            9, toSqlArray(row.getField(8), ClickHouseDataType.UInt32));
+                    preparedStatement.setArray(
+                            10, toSqlArray(row.getField(9), ClickHouseDataType.Int64));
+                    preparedStatement.setArray(
+                            11, toSqlArray(row.getField(10), ClickHouseDataType.UInt64));
+                    preparedStatement.setArray(
+                            12, toSqlArray(row.getField(11), ClickHouseDataType.Float32));
+                    preparedStatement.setArray(
+                            13, toSqlArray(row.getField(12), ClickHouseDataType.Float64));
+                    preparedStatement.setString(14, (String) row.getField(13));
+                    preparedStatement.setBoolean(15, (Boolean) row.getField(14));
+                    preparedStatement.setByte(16, (Byte) row.getField(15));
+                    preparedStatement.setShort(17, (Short) row.getField(16));
+                    preparedStatement.setShort(18, (Short) row.getField(17));
+                    preparedStatement.setInt(19, (Integer) row.getField(18));
                     preparedStatement.setInt(20, (Integer) row.getField(19));
-                    preparedStatement.setString(21, (String) row.getField(20));
-                    preparedStatement.setArray(22, toSqlArray(row.getField(21)));
-                    preparedStatement.setArray(23, toSqlArray(row.getField(22)));
-                    preparedStatement.setArray(24, toSqlArray(row.getField(23)));
-                    preparedStatement.setObject(25, row.getField(24));
-                    preparedStatement.setObject(26, row.getField(25));
-                    preparedStatement.setObject(27, row.getField(26));
-                    preparedStatement.setObject(28, row.getField(27));
-                    preparedStatement.setObject(29, row.getField(28));
-                    preparedStatement.setObject(30, row.getField(29));
+                    preparedStatement.setLong(21, (Long) row.getField(20));
+                    preparedStatement.setLong(22, (Long) row.getField(21));
+                    preparedStatement.setString(23, (String) row.getField(22));
+                    preparedStatement.setFloat(24, (Float) row.getField(23));
+                    preparedStatement.setDouble(25, (Double) row.getField(24));
+                    preparedStatement.setBigDecimal(26, (BigDecimal) row.getField(25));
+                    preparedStatement.setDate(27, Date.valueOf((LocalDate) row.getField(26)));
+                    preparedStatement.setTimestamp(
+                            28, Timestamp.valueOf((LocalDateTime) row.getField(27)));
+                    preparedStatement.setInt(29, (Integer) row.getField(28));
+                    preparedStatement.setString(30, (String) row.getField(29));
+                    preparedStatement.setArray(
+                            31, toSqlArray(row.getField(30), ClickHouseDataType.UInt32));
+                    preparedStatement.setArray(
+                            32, toSqlArray(row.getField(31), ClickHouseDataType.Float64));
+                    preparedStatement.setArray(
+                            33, toSqlArray(row.getField(32), ClickHouseDataType.String));
+                    preparedStatement.setObject(34, row.getField(33));
+                    preparedStatement.setObject(35, row.getField(34));
+                    preparedStatement.setObject(36, row.getField(35));
+                    preparedStatement.setObject(37, row.getField(36));
+                    preparedStatement.setObject(38, row.getField(37));
+                    preparedStatement.setObject(39, row.getField(38));
+                    preparedStatement.setObject(40, row.getField(39));
                     preparedStatement.addBatch();
                 }
                 preparedStatement.executeBatch();
@@ -478,17 +541,26 @@ public class ClickhouseIT extends TestSuiteBase implements TestResource {
                             "id",
                             "c_map",
                             "c_array_string",
+                            "c_array_byte",
+                            "c_array_ubyte",
                             "c_array_short",
+                            "c_array_ushort",
                             "c_array_int",
+                            "c_array_uint",
                             "c_array_long",
+                            "c_array_ulong",
                             "c_array_float",
                             "c_array_double",
                             "c_string",
                             "c_boolean",
                             "c_int8",
+                            "c_uint8",
                             "c_int16",
+                            "c_uint16",
                             "c_int32",
+                            "c_uint32",
                             "c_int64",
+                            "c_uint64",
                             "c_float32",
                             "c_float64",
                             "c_decimal",
@@ -504,23 +576,33 @@ public class ClickhouseIT extends TestSuiteBase implements TestResource {
                             "c_int256",
                             "c_uint256",
                             "c_point",
-                            "c_ring"
+                            "c_ring",
+                            "c_json"
                         },
                         new SeaTunnelDataType[] {
                             BasicType.LONG_TYPE,
                             new MapType<>(BasicType.STRING_TYPE, BasicType.INT_TYPE),
                             ArrayType.STRING_ARRAY_TYPE,
+                            ArrayType.BYTE_ARRAY_TYPE,
+                            ArrayType.SHORT_ARRAY_TYPE,
                             ArrayType.SHORT_ARRAY_TYPE,
                             ArrayType.INT_ARRAY_TYPE,
+                            ArrayType.INT_ARRAY_TYPE,
                             ArrayType.LONG_ARRAY_TYPE,
+                            ArrayType.LONG_ARRAY_TYPE,
+                            ArrayType.STRING_ARRAY_TYPE,
                             ArrayType.FLOAT_ARRAY_TYPE,
                             ArrayType.DOUBLE_ARRAY_TYPE,
                             BasicType.STRING_TYPE,
                             BasicType.BOOLEAN_TYPE,
                             BasicType.BYTE_TYPE,
                             BasicType.SHORT_TYPE,
+                            BasicType.SHORT_TYPE,
+                            BasicType.INT_TYPE,
                             BasicType.INT_TYPE,
                             BasicType.LONG_TYPE,
+                            BasicType.LONG_TYPE,
+                            BasicType.STRING_TYPE,
                             BasicType.FLOAT_TYPE,
                             BasicType.DOUBLE_TYPE,
                             new DecimalType(9, 4),
@@ -536,6 +618,7 @@ public class ClickhouseIT extends TestSuiteBase implements TestResource {
                             BasicType.STRING_TYPE,
                             BasicType.STRING_TYPE,
                             BasicType.STRING_TYPE,
+                            BasicType.STRING_TYPE,
                             BasicType.STRING_TYPE
                         });
         List<SeaTunnelRow> rows = new ArrayList<>();
@@ -546,17 +629,26 @@ public class ClickhouseIT extends TestSuiteBase implements TestResource {
                                 (long) i,
                                 Collections.singletonMap("key", Integer.parseInt("1")),
                                 new String[] {"string"},
+                                new Byte[] {Byte.parseByte("1")},
+                                new Short[] {UnsignedByte.MAX_VALUE.shortValue()},
                                 new Short[] {Short.parseShort("1")},
+                                new Integer[] {UnsignedShort.MAX_VALUE.intValue()},
                                 new Integer[] {Integer.parseInt("1")},
+                                new Long[] {UnsignedInteger.MAX_VALUE.longValue()},
                                 new Long[] {Long.parseLong("1")},
+                                new String[] {UnsignedLong.MAX_VALUE.toString()},
                                 new Float[] {Float.parseFloat("1.1")},
                                 new Double[] {Double.parseDouble("1.1")},
                                 "string",
                                 Boolean.FALSE,
                                 Byte.parseByte("1"),
+                                UnsignedByte.MAX_VALUE.shortValue(),
                                 Short.parseShort("1"),
+                                UnsignedShort.MAX_VALUE.intValue(),
                                 Integer.parseInt("1"),
+                                UnsignedInteger.MAX_VALUE.longValue(),
                                 Long.parseLong("1"),
+                                UnsignedLong.MAX_VALUE.toString(),
                                 Float.parseFloat("1.1"),
                                 Double.parseDouble("1.1"),
                                 BigDecimal.valueOf(11L, 1),
@@ -571,8 +663,10 @@ public class ClickhouseIT extends TestSuiteBase implements TestResource {
                                 "340282366920938463463374607431768211455",
                                 "57896044618658097711785492504343953926634992332820282019728792003956564819967",
                                 "115792089237316195423570985008687907853269984665640564039457584007913129639935",
-                                new double[] {1, 2},
-                                new double[][] {{2, 3}, {4, 5}}
+                                ClickHouseGeoPointValue.of(new double[] {1, 2}).toSqlExpression(),
+                                ClickHouseGeoRingValue.of(new double[][] {{2, 3}, {4, 5}})
+                                        .toSqlExpression(),
+                                String.format("{\"id\": %d}", i)
                             });
             rows.add(row);
         }

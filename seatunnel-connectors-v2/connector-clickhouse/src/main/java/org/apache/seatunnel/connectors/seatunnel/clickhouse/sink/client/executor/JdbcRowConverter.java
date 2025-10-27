@@ -50,7 +50,6 @@ public class JdbcRowConverter implements Serializable {
             new StringInjectFunction();
 
     private final String[] projectionFields;
-    private final Map<String, String> clickhouseTableSchema;
     private final Map<String, ClickhouseFieldInjectFunction> fieldInjectFunctionMap;
     private final Map<String, Function<SeaTunnelRow, Object>> fieldGetterMap;
 
@@ -59,14 +58,9 @@ public class JdbcRowConverter implements Serializable {
             @NonNull Map<String, String> clickhouseTableSchema,
             @NonNull String[] projectionFields) {
         this.projectionFields = projectionFields;
-        this.clickhouseTableSchema = clickhouseTableSchema;
         this.fieldInjectFunctionMap =
                 createFieldInjectFunctionMap(projectionFields, clickhouseTableSchema);
         this.fieldGetterMap = createFieldGetterMap(projectionFields, rowType);
-    }
-
-    public Map<String, String> getTableSchema() {
-        return clickhouseTableSchema;
     }
 
     public PreparedStatement toExternal(SeaTunnelRow row, PreparedStatement statement)

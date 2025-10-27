@@ -28,10 +28,11 @@
     <name>SeaTunnel : Connectors V2 : Clickhouse</name>
 
     <properties>
-        <clickhouse.version>0.3.2-patch11</clickhouse.version>
+        <clickhouse.version>0.8.6</clickhouse.version>
         <sshd.scp.version>2.7.0</sshd.scp.version>
         <jsqlparser.version>4.9</jsqlparser.version>
     </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.apache.sshd</groupId>
@@ -82,5 +83,32 @@
         </dependency>
 
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <phase>package</phase>
+                        <configuration>
+                            <shadedArtifactAttached>false</shadedArtifactAttached>
+                            <relocations>
+                                <!-- relocate clickhouse-jdbc's antlr4-runtime to resolve version conflict with Spark -->
+                                <relocation>
+                                    <pattern>org.antlr.v4.runtime</pattern>
+                                    <shadedPattern>${seatunnel.shade.package}.antlr4.org.antlr.v4.runtime</shadedPattern>
+                                </relocation>
+                            </relocations>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

@@ -36,10 +36,11 @@ import org.apache.seatunnel.connectors.seatunnel.clickhouse.util.IntHolder;
 
 import org.apache.commons.lang3.StringUtils;
 
-import com.clickhouse.jdbc.internal.ClickHouseConnectionImpl;
+import com.clickhouse.jdbc.ConnectionImpl;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -138,8 +139,7 @@ public class ClickhouseSinkWriter
 
     private void flush() {
         for (ClickhouseBatchStatement batchStatement : statementMap.values()) {
-            try (ClickHouseConnectionImpl needClosedConnection =
-                            batchStatement.getClickHouseConnection();
+            try (Connection needClosedConnection = batchStatement.getClickHouseConnection();
                     JdbcBatchStatementExecutor needClosedStatement =
                             batchStatement.getJdbcBatchStatementExecutor()) {
                 IntHolder intHolder = batchStatement.getIntHolder();
@@ -163,8 +163,9 @@ public class ClickhouseSinkWriter
                 .forEach(
                         (weight, s) -> {
                             try {
-                                ClickHouseConnectionImpl clickhouseConnection =
-                                        new ClickHouseConnectionImpl(
+                                // use updated v2 connection for better performance/features
+                                Connection clickhouseConnection =
+                                        new ConnectionImpl(
                                                 s.getJdbcUrl(), this.option.getProperties());
 
                                 String[] orderByKeys = null;
@@ -209,7 +210,7 @@ public class ClickhouseSinkWriter
     }
 
     private boolean clickhouseServerEnableExperimentalLightweightDelete(
-            ClickHouseConnectionImpl clickhouseConnection) {
+            Connection clickhouseConnection) {
         if (!option.isAllowExperimentalLightweightDelete()) {
             return false;
         }

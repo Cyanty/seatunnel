@@ -20,16 +20,16 @@ package org.apache.seatunnel.connectors.seatunnel.clickhouse.sink.client;
 import org.apache.seatunnel.connectors.seatunnel.clickhouse.sink.client.executor.JdbcBatchStatementExecutor;
 import org.apache.seatunnel.connectors.seatunnel.clickhouse.util.IntHolder;
 
-import com.clickhouse.jdbc.internal.ClickHouseConnectionImpl;
+import java.sql.Connection;
 
 public class ClickhouseBatchStatement {
 
-    private final ClickHouseConnectionImpl clickHouseConnection;
+    private final Connection clickHouseConnection;
     private final JdbcBatchStatementExecutor jdbcBatchStatementExecutor;
     private final IntHolder intHolder;
 
     public ClickhouseBatchStatement(
-            ClickHouseConnectionImpl clickHouseConnection,
+            Connection clickHouseConnection,
             JdbcBatchStatementExecutor jdbcBatchStatementExecutor,
             IntHolder intHolder) {
         this.clickHouseConnection = clickHouseConnection;
@@ -37,7 +37,7 @@ public class ClickhouseBatchStatement {
         this.intHolder = intHolder;
     }
 
-    public ClickHouseConnectionImpl getClickHouseConnection() {
+    public Connection getClickHouseConnection() {
         return clickHouseConnection;
     }
 

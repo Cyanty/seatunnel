@@ -41,10 +41,10 @@ import org.apache.seatunnel.connectors.seatunnel.clickhouse.util.TypeConvertUtil
 
 import org.apache.commons.lang3.StringUtils;
 
-import com.clickhouse.client.ClickHouseColumn;
 import com.clickhouse.client.ClickHouseException;
 import com.clickhouse.client.ClickHouseNode;
 import com.clickhouse.client.ClickHouseResponse;
+import com.clickhouse.data.ClickHouseColumn;
 import com.google.auto.service.AutoService;
 
 import java.io.Serializable;

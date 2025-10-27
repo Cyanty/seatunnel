@@ -31,7 +31,6 @@ public class LongInjectFunction implements ClickhouseFieldInjectFunction {
     @Override
     public boolean isCurrentFieldType(String fieldType) {
         return "UInt32".equals(fieldType)
-                || "UInt64".equals(fieldType)
                 || "Int64".equals(fieldType)
                 || "IntervalYear".equals(fieldType)
                 || "IntervalQuarter".equals(fieldType)
